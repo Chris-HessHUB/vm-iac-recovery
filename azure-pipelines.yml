@@ -37,18 +37,17 @@ variables:
     value: 'viutfstate001'
   - name: containerName
     value: 'tfstate'
-
-# Variable group for secrets (create this in Azure DevOps)
-# Library > Variable Groups > Create "vm-iac-secrets"
-variables:
+  
+  # Variable group for secrets (create this in Azure DevOps)
+  # Library > Variable Groups > Create "vm-iac-secrets"
+  # Required secrets in variable group:
+  # - SSH_PUBLIC_KEY
+  # - SSH_PRIVATE_KEY
+  # - DYNATRACE_API_TOKEN
+  # - DYNATRACE_TENANT_TOKEN
+  # - MYSQL_ROOT_PASSWORD
+  # - MYSQL_PASSWORD
   - group: vm-iac-secrets
-    # Required secrets in variable group:
-    # - SSH_PUBLIC_KEY
-    # - SSH_PRIVATE_KEY
-    # - DYNATRACE_API_TOKEN
-    # - DYNATRACE_TENANT_TOKEN
-    # - MYSQL_ROOT_PASSWORD
-    # - MYSQL_PASSWORD
 
 pool:
   vmImage: 'ubuntu-latest'
