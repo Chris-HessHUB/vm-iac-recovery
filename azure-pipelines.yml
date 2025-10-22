@@ -62,7 +62,7 @@ stages:
         steps:
           - checkout: self
           
-          - task: TerraformInstaller@0
+          - task: ms-devlabs.custom-terraform-tasks.custom-terraform-installer-task.TerraformInstaller@0
             displayName: 'Install Terraform'
             inputs:
               terraformVersion: $(terraformVersion)
@@ -113,7 +113,7 @@ stages:
               artifact: 'terraform-plan'
               path: '$(terraformWorkingDirectory)'
           
-          - task: TerraformInstaller@0
+          - task: ms-devlabs.custom-terraform-tasks.custom-terraform-installer-task.TerraformInstaller@0
             displayName: 'Install Terraform'
             inputs:
               terraformVersion: $(terraformVersion)
@@ -349,7 +349,7 @@ stages:
         steps:
           - checkout: self
           
-          - task: TerraformInstaller@0
+          - task: ms-devlabs.custom-terraform-tasks.custom-terraform-installer-task.TerraformInstaller@0
             displayName: 'Install Terraform'
             inputs:
               terraformVersion: $(terraformVersion)
