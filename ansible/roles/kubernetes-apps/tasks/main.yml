@@ -1,0 +1,27 @@
+---
+# Kubernetes Applications Deployment
+
+- name: Deploy MySQL StatefulSet
+  include_tasks: mysql.yml
+  tags: ['mysql', 'database']
+
+- name: Deploy Flask Applications
+  include_tasks: flask.yml
+  tags: ['flask', 'apps']
+
+- name: Deploy Order Generator
+  include_tasks: order-generator.yml
+  tags: ['order-generator']
+
+- name: Deploy MySQL-to-SQL Server Sync Service
+  include_tasks: sync-service.yml
+  tags: ['sync-service']
+
+- name: Verify all deployments
+  shell: kubectl get pods -A
+  register: all_pods
+  changed_when: false
+
+- name: Display all running pods
+  debug:
+    msg: "{{ all_pods.stdout_lines }}"

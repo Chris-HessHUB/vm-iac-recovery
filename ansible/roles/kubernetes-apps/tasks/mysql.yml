@@ -1,0 +1,137 @@
+---
+# MySQL Deployment Tasks
+
+- name: Create MySQL ConfigMap
+  shell: |
+    cat <<EOF | kubectl apply -f -
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: mysql-config
+      namespace: mysql
+    data:
+      my.cnf: |
+        [mysqld]
+        max_connections=200
+        character-set-server=utf8mb4
+        collation-server=utf8mb4_unicode_ci
+        default-storage-engine=INNODB
+        innodb_buffer_pool_size=128M
+    EOF
+  register: mysql_configmap
+  changed_when: "'created' in mysql_configmap.stdout or 'configured' in mysql_configmap.stdout"
+
+- name: Create MySQL Secret
+  shell: |
+    kubectl create secret generic mysql-secret \
+      --namespace=mysql \
+      --from-literal=mysql-root-password="{{ mysql_root_password }}" \
+      --from-literal=mysql-password="{{ mysql_password }}" \
+      --dry-run=client -o yaml | kubectl apply -f -
+  register: mysql_secret
+  changed_when: "'created' in mysql_secret.stdout"
+
+- name: Deploy MySQL StatefulSet
+  shell: |
+    cat <<EOF | kubectl apply -f -
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: mysql-pvc
+      namespace: mysql
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      storageClassName: local-path
+      resources:
+        requests:
+          storage: 1Gi
+    ---
+    apiVersion: apps/v1
+    kind: StatefulSet
+    metadata:
+      name: mysql-statefulset
+      namespace: mysql
+    spec:
+      serviceName: mysql
+      replicas: 1
+      selector:
+        matchLabels:
+          app: mysql
+      template:
+        metadata:
+          labels:
+            app: mysql
+        spec:
+          containers:
+          - name: mysql
+            image: mysql:8.0
+            env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: mysql-root-password
+            - name: MYSQL_DATABASE
+              value: "{{ mysql_database }}"
+            - name: MYSQL_USER
+              value: "{{ mysql_user }}"
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: mysql-password
+            ports:
+            - containerPort: 3306
+              name: mysql
+            volumeMounts:
+            - name: mysql-persistent-storage
+              mountPath: /var/lib/mysql
+            - name: mysql-config
+              mountPath: /etc/mysql/conf.d
+          volumes:
+          - name: mysql-config
+            configMap:
+              name: mysql-config
+      volumeClaimTemplates:
+      - metadata:
+          name: mysql-persistent-storage
+        spec:
+          accessModes: [ "ReadWriteOnce" ]
+          storageClassName: local-path
+          resources:
+            requests:
+              storage: 1Gi
+    ---
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: mysql
+      namespace: mysql
+    spec:
+      ports:
+      - port: 3306
+        targetPort: 3306
+      selector:
+        app: mysql
+      clusterIP: None
+    EOF
+  register: mysql_deploy
+  changed_when: "'created' in mysql_deploy.stdout or 'configured' in mysql_deploy.stdout"
+
+- name: Wait for MySQL pod to be ready
+  shell: kubectl wait --for=condition=ready pod -l app=mysql -n mysql --timeout=300s
+  register: mysql_ready
+  retries: 5
+  delay: 10
+  until: mysql_ready.rc == 0
+  failed_when: false
+
+- name: Get MySQL pod status
+  shell: kubectl get pods -n mysql
+  register: mysql_pods
+  changed_when: false
+
+- name: Display MySQL status
+  debug:
+    msg: "{{ mysql_pods.stdout_lines }}"

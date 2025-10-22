@@ -1,0 +1,31 @@
+---
+# Global Variables for All Roles
+
+# k3s Configuration
+k3s_version: "v1.28.5+k3s1"
+k3s_install_url: "https://get.k3s.io"
+
+# Docker/Containerd Configuration
+docker_version: "latest"
+containerd_version: "latest"
+
+# Dynatrace Configuration
+dynatrace_oneagent_install_url: "https://{{ dynatrace_environment_id }}.live.dynatrace.com/api/v1/deployment/installer/agent/unix/default/latest"
+dynatrace_server_url: "https://{{ dynatrace_environment_id }}.live.dynatrace.com/api"
+
+# Kubernetes Namespaces
+k8s_namespaces:
+  - default
+  - mysql
+  - flask-app
+  - dynatrace
+
+# MySQL Configuration
+mysql_pvc_size: "5Gi"
+mysql_storage_class: "local-path"
+
+# System Configuration
+system_timezone: "America/New_York"
+ntp_servers:
+  - "time.windows.com"
+  - "time.nist.gov"

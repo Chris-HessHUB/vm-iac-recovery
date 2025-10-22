@@ -1,0 +1,125 @@
+apiVersion: v1
+items:
+- apiVersion: v1
+  kind: PersistentVolume
+  metadata:
+    annotations:
+      local.path.provisioner/selected-node: vm-showcase-01
+      pv.kubernetes.io/provisioned-by: rancher.io/local-path
+    creationTimestamp: "2025-10-07T18:40:31Z"
+    finalizers:
+    - kubernetes.io/pv-protection
+    name: pvc-744c89c6-35ce-4975-94ae-f604d6f187f4
+    resourceVersion: "545004"
+    uid: abc0a534-9f7e-4920-88e4-0a852a31b2a3
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    capacity:
+      storage: 1Gi
+    claimRef:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      name: ag-tmp-gateway-default-activegate-0
+      namespace: dynatrace
+      resourceVersion: "544794"
+      uid: 744c89c6-35ce-4975-94ae-f604d6f187f4
+    local:
+      path: /var/lib/rancher/k3s/storage/pvc-744c89c6-35ce-4975-94ae-f604d6f187f4_dynatrace_ag-tmp-gateway-default-activegate-0
+    nodeAffinity:
+      required:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: kubernetes.io/hostname
+            operator: In
+            values:
+            - vm-showcase-01
+    persistentVolumeReclaimPolicy: Delete
+    storageClassName: local-path
+    volumeMode: Filesystem
+  status:
+    lastPhaseTransitionTime: "2025-10-07T18:40:31Z"
+    phase: Bound
+- apiVersion: v1
+  kind: PersistentVolume
+  metadata:
+    annotations:
+      local.path.provisioner/selected-node: vm-showcase-01
+      pv.kubernetes.io/provisioned-by: rancher.io/local-path
+    creationTimestamp: "2025-09-23T19:08:29Z"
+    finalizers:
+    - kubernetes.io/pv-protection
+    name: pvc-954c2c93-b5b1-4422-8a12-c190037bbb13
+    resourceVersion: "14289"
+    uid: 4ba5e1e0-9a47-440e-8297-c06620e37319
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    capacity:
+      storage: 1Gi
+    claimRef:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      name: mysql-persistent-storage-mysql-statefulset-0
+      namespace: mysql
+      resourceVersion: "14264"
+      uid: 954c2c93-b5b1-4422-8a12-c190037bbb13
+    local:
+      path: /var/lib/rancher/k3s/storage/pvc-954c2c93-b5b1-4422-8a12-c190037bbb13_mysql_mysql-persistent-storage-mysql-statefulset-0
+    nodeAffinity:
+      required:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: kubernetes.io/hostname
+            operator: In
+            values:
+            - vm-showcase-01
+    persistentVolumeReclaimPolicy: Delete
+    storageClassName: local-path
+    volumeMode: Filesystem
+  status:
+    lastPhaseTransitionTime: "2025-09-23T19:08:29Z"
+    phase: Bound
+- apiVersion: v1
+  kind: PersistentVolume
+  metadata:
+    annotations:
+      local.path.provisioner/selected-node: vm-showcase-01
+      pv.kubernetes.io/provisioned-by: rancher.io/local-path
+    creationTimestamp: "2025-10-03T16:48:02Z"
+    finalizers:
+    - kubernetes.io/pv-protection
+    name: pvc-b1e180f3-c110-4485-954e-b2da56d2730a
+    resourceVersion: "435687"
+    uid: 6066dfa6-1583-4c91-ac56-0f2a323a0751
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    capacity:
+      storage: 5Gi
+    claimRef:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      name: mysql-pvc
+      namespace: default
+      resourceVersion: "435667"
+      uid: b1e180f3-c110-4485-954e-b2da56d2730a
+    local:
+      path: /var/lib/rancher/k3s/storage/pvc-b1e180f3-c110-4485-954e-b2da56d2730a_default_mysql-pvc
+    nodeAffinity:
+      required:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: kubernetes.io/hostname
+            operator: In
+            values:
+            - vm-showcase-01
+    persistentVolumeReclaimPolicy: Delete
+    storageClassName: local-path
+    volumeMode: Filesystem
+  status:
+    lastPhaseTransitionTime: "2025-10-03T16:48:02Z"
+    phase: Bound
+kind: List
+metadata:
+  resourceVersion: ""

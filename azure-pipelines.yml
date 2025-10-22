@@ -1,0 +1,383 @@
+# Azure DevOps Pipeline for VM IaC Deployment
+# This pipeline automates Terraform + Ansible deployment
+
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+  paths:
+    include:
+      - terraform/**
+      - ansible/**
+      - azure-pipelines.yml
+
+# Manual trigger option
+pr: none
+
+variables:
+  # Terraform Configuration
+  - name: terraformVersion
+    value: 'latest'
+  - name: terraformWorkingDirectory
+    value: '$(System.DefaultWorkingDirectory)/terraform/environments/test'
+  
+  # Ansible Configuration
+  - name: ansibleWorkingDirectory
+    value: '$(System.DefaultWorkingDirectory)/ansible'
+  - name: ansibleVersion
+    value: 'latest'
+  
+  # Azure Configuration
+  - name: azureResourceGroup
+    value: 'viu-itsm-eastus2-rg'
+  - name: azureLocation
+    value: 'eastus2'
+  - name: storageAccountName
+    value: 'viutfstate001'
+  - name: containerName
+    value: 'tfstate'
+
+# Variable group for secrets (create this in Azure DevOps)
+# Library > Variable Groups > Create "vm-iac-secrets"
+variables:
+  - group: vm-iac-secrets
+    # Required secrets in variable group:
+    # - SSH_PUBLIC_KEY
+    # - SSH_PRIVATE_KEY
+    # - DYNATRACE_API_TOKEN
+    # - DYNATRACE_TENANT_TOKEN
+    # - MYSQL_ROOT_PASSWORD
+    # - MYSQL_PASSWORD
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+  # Stage 1: Terraform - Provision Infrastructure
+  - stage: Terraform
+    displayName: 'Provision Infrastructure'
+    jobs:
+      - job: TerraformPlan
+        displayName: 'Terraform Plan'
+        steps:
+          - checkout: self
+          
+          - task: TerraformInstaller@0
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: $(terraformVersion)
+          
+          - task: AzureCLI@2
+            displayName: 'Azure Login and Terraform Init'
+            inputs:
+              azureSubscription: 'Azure-Service-Connection'  # TODO: Replace with your service connection name
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                cd $(terraformWorkingDirectory)
+                
+                # Create terraform.tfvars with SSH key
+                cat > terraform.tfvars << EOF
+                ssh_public_key = <<-EOT
+                $(SSH_PUBLIC_KEY)
+                EOT
+                EOF
+                
+                # Initialize Terraform
+                terraform init \
+                  -backend-config="resource_group_name=$(azureResourceGroup)" \
+                  -backend-config="storage_account_name=$(storageAccountName)" \
+                  -backend-config="container_name=$(containerName)"
+                
+                # Validate
+                terraform validate
+                
+                # Plan
+                terraform plan -out=tfplan
+          
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish Terraform Plan'
+            inputs:
+              targetPath: '$(terraformWorkingDirectory)/tfplan'
+              artifact: 'terraform-plan'
+      
+      - job: TerraformApply
+        displayName: 'Terraform Apply'
+        dependsOn: TerraformPlan
+        steps:
+          - checkout: self
+          
+          - task: DownloadPipelineArtifact@2
+            displayName: 'Download Terraform Plan'
+            inputs:
+              artifact: 'terraform-plan'
+              path: '$(terraformWorkingDirectory)'
+          
+          - task: TerraformInstaller@0
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: $(terraformVersion)
+          
+          - task: AzureCLI@2
+            displayName: 'Terraform Apply'
+            inputs:
+              azureSubscription: 'Azure-Service-Connection'  # TODO: Replace with your service connection name
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                cd $(terraformWorkingDirectory)
+                
+                # Re-create terraform.tfvars
+                cat > terraform.tfvars << EOF
+                ssh_public_key = <<-EOT
+                $(SSH_PUBLIC_KEY)
+                EOT
+                EOF
+                
+                # Re-initialize
+                terraform init \
+                  -backend-config="resource_group_name=$(azureResourceGroup)" \
+                  -backend-config="storage_account_name=$(storageAccountName)" \
+                  -backend-config="container_name=$(containerName)"
+                
+                # Apply
+                terraform apply -auto-approve tfplan
+                
+                # Get outputs
+                VM_IP=$(terraform output -raw vm_public_ip)
+                VM_NAME=$(terraform output -raw vm_name)
+                
+                echo "##vso[task.setvariable variable=vmPublicIP;isOutput=true]$VM_IP"
+                echo "##vso[task.setvariable variable=vmName;isOutput=true]$VM_NAME"
+                
+                echo "VM Deployed:"
+                echo "  Name: $VM_NAME"
+                echo "  IP: $VM_IP"
+            name: terraformOutput
+  
+  # Stage 2: Wait for VM to be Ready
+  - stage: WaitForVM
+    displayName: 'Wait for VM SSH Access'
+    dependsOn: Terraform
+    variables:
+      vmIP: $[ stageDependencies.Terraform.TerraformApply.outputs['terraformOutput.vmPublicIP'] ]
+    jobs:
+      - job: WaitForSSH
+        displayName: 'Wait for SSH'
+        steps:
+          - task: Bash@3
+            displayName: 'Wait for SSH to be available'
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "Waiting for SSH access to $(vmIP)..."
+                
+                MAX_ATTEMPTS=30
+                ATTEMPT=0
+                
+                while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+                  ATTEMPT=$((ATTEMPT + 1))
+                  echo "Attempt $ATTEMPT of $MAX_ATTEMPTS..."
+                  
+                  if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i <(echo "$(SSH_PRIVATE_KEY)") azureuser@$(vmIP) "echo 'SSH connection successful'"; then
+                    echo "SSH is ready!"
+                    exit 0
+                  fi
+                  
+                  echo "SSH not ready yet, waiting 10 seconds..."
+                  sleep 10
+                done
+                
+                echo "ERROR: SSH did not become available after $MAX_ATTEMPTS attempts"
+                exit 1
+  
+  # Stage 3: Ansible Configuration
+  - stage: Ansible
+    displayName: 'Configure VM with Ansible'
+    dependsOn: 
+      - Terraform
+      - WaitForVM
+    variables:
+      vmIP: $[ stageDependencies.Terraform.TerraformApply.outputs['terraformOutput.vmPublicIP'] ]
+      vmName: $[ stageDependencies.Terraform.TerraformApply.outputs['terraformOutput.vmName'] ]
+    jobs:
+      - job: AnsibleDeploy
+        displayName: 'Run Ansible Playbook'
+        steps:
+          - checkout: self
+          
+          - task: Bash@3
+            displayName: 'Install Ansible'
+            inputs:
+              targetType: 'inline'
+              script: |
+                sudo apt update
+                sudo apt install -y ansible jq
+                ansible --version
+          
+          - task: Bash@3
+            displayName: 'Prepare Ansible Environment'
+            inputs:
+              targetType: 'inline'
+              script: |
+                cd $(ansibleWorkingDirectory)
+                
+                # Create SSH key files
+                mkdir -p ~/.ssh
+                echo "$(SSH_PRIVATE_KEY)" > ~/.ssh/id_rsa
+                echo "$(SSH_PUBLIC_KEY)" > ~/.ssh/id_rsa.pub
+                chmod 600 ~/.ssh/id_rsa
+                chmod 644 ~/.ssh/id_rsa.pub
+                
+                # Create dynamic inventory
+                cat > inventory/hosts.yml << EOF
+                all:
+                  children:
+                    ubuntu_vms:
+                      hosts:
+                        test-vm:
+                          ansible_host: $(vmIP)
+                          ansible_user: azureuser
+                          ansible_ssh_private_key_file: ~/.ssh/id_rsa
+                          ansible_python_interpreter: /usr/bin/python3
+                          vm_environment: test
+                          vm_purpose: dr-testing
+                EOF
+                
+                # Update secrets file with pipeline variables
+                cat > vars/secrets.yml << EOF
+                ---
+                dynatrace_environment_id: "bnh29255"
+                dynatrace_tenant_token: "$(DYNATRACE_TENANT_TOKEN)"
+                dynatrace_api_token: "$(DYNATRACE_API_TOKEN)"
+                dynatrace_activegate_token: "$(DYNATRACE_API_TOKEN)"
+                mysql_root_password: "$(MYSQL_ROOT_PASSWORD)"
+                mysql_database: "orders"
+                mysql_user: "appuser"
+                mysql_password: "$(MYSQL_PASSWORD)"
+                EOF
+                
+                echo "Ansible environment prepared for VM: $(vmIP)"
+          
+          - task: Bash@3
+            displayName: 'Test Ansible Connection'
+            inputs:
+              targetType: 'inline'
+              script: |
+                cd $(ansibleWorkingDirectory)
+                ansible -i inventory/hosts.yml ubuntu_vms -m ping
+          
+          - task: Bash@3
+            displayName: 'Run Ansible Playbook - Base System'
+            inputs:
+              targetType: 'inline'
+              script: |
+                cd $(ansibleWorkingDirectory)
+                ansible-playbook -i inventory/hosts.yml site.yml \
+                  --tags "base,docker,k3s" \
+                  -v
+          
+          - task: Bash@3
+            displayName: 'Run Ansible Playbook - Dynatrace'
+            inputs:
+              targetType: 'inline'
+              script: |
+                cd $(ansibleWorkingDirectory)
+                ansible-playbook -i inventory/hosts.yml site.yml \
+                  --tags "oneagent,activegate" \
+                  -v
+            continueOnError: true  # ActiveGate may fail due to token scope
+          
+          - task: Bash@3
+            displayName: 'Run Ansible Playbook - Applications'
+            inputs:
+              targetType: 'inline'
+              script: |
+                cd $(ansibleWorkingDirectory)
+                ansible-playbook -i inventory/hosts.yml site.yml \
+                  --tags "k8s-apps" \
+                  -v
+          
+          - task: Bash@3
+            displayName: 'Verify Deployment'
+            inputs:
+              targetType: 'inline'
+              script: |
+                ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa azureuser@$(vmIP) << 'EOFVERIFY'
+                echo "===== Deployment Verification ====="
+                echo ""
+                echo "k3s Version:"
+                k3s --version
+                echo ""
+                echo "Kubernetes Nodes:"
+                kubectl get nodes
+                echo ""
+                echo "All Pods:"
+                kubectl get pods -A
+                echo ""
+                echo "Deployments:"
+                kubectl get deployments -A
+                echo ""
+                echo "Services:"
+                kubectl get svc -A
+                echo ""
+                echo "MySQL Order Count:"
+                kubectl exec -it -n mysql mysql-statefulset-0 -- mysql -uroot -p$(MYSQL_ROOT_PASSWORD) -e "USE orders; SELECT COUNT(*) FROM orders;" 2>/dev/null || echo "MySQL check skipped"
+                echo ""
+                echo "====================================="
+                EOFVERIFY
+
+# Optional: Destroy stage (manual approval required)
+  - stage: Destroy
+    displayName: 'Destroy Infrastructure (Manual)'
+    dependsOn: Ansible
+    condition: and(succeeded(), eq(variables['Build.Reason'], 'Manual'))
+    jobs:
+      - job: ManualApproval
+        displayName: 'Wait for Approval'
+        pool: server
+        steps:
+          - task: ManualValidation@0
+            displayName: 'Approve Destruction'
+            inputs:
+              notifyUsers: ''
+              instructions: 'Please confirm you want to destroy the test VM infrastructure'
+      
+      - job: TerraformDestroy
+        displayName: 'Terraform Destroy'
+        dependsOn: ManualApproval
+        steps:
+          - checkout: self
+          
+          - task: TerraformInstaller@0
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: $(terraformVersion)
+          
+          - task: AzureCLI@2
+            displayName: 'Destroy Infrastructure'
+            inputs:
+              azureSubscription: 'Azure-Service-Connection'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                cd $(terraformWorkingDirectory)
+                
+                # Re-create terraform.tfvars
+                cat > terraform.tfvars << EOF
+                ssh_public_key = <<-EOT
+                $(SSH_PUBLIC_KEY)
+                EOT
+                EOF
+                
+                # Re-initialize
+                terraform init \
+                  -backend-config="resource_group_name=$(azureResourceGroup)" \
+                  -backend-config="storage_account_name=$(storageAccountName)" \
+                  -backend-config="container_name=$(containerName)"
+                
+                # Destroy
+                terraform destroy -auto-approve
+                
+                echo "Infrastructure destroyed successfully"

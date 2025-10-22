@@ -1,0 +1,42 @@
+---
+# Dynatrace OneAgent Installation Tasks
+
+- name: Check if Dynatrace OneAgent is already installed
+  stat:
+    path: /opt/dynatrace/oneagent
+  register: oneagent_installed
+
+- name: Download Dynatrace OneAgent installer
+  get_url:
+    url: "{{ dynatrace_oneagent_install_url }}?Api-Token={{ dynatrace_tenant_token }}&arch=x86&flavor=default"
+    dest: /tmp/Dynatrace-OneAgent-Linux.sh
+    mode: '0755'
+  when: not oneagent_installed.stat.exists
+
+- name: Install Dynatrace OneAgent
+  shell: |
+    /tmp/Dynatrace-OneAgent-Linux.sh \
+      --set-app-log-content-access=true
+  when: not oneagent_installed.stat.exists
+  register: oneagent_install_result
+
+- name: Wait for OneAgent service to start
+  wait_for:
+    timeout: 30
+  when: oneagent_install_result.changed
+
+- name: Check OneAgent service status
+  systemd:
+    name: oneagent
+    state: started
+  when: oneagent_install_result.changed
+
+- name: Verify OneAgent is running
+  command: systemctl is-active oneagent
+  register: oneagent_status
+  changed_when: false
+  failed_when: false
+
+- name: Display OneAgent status
+  debug:
+    msg: "Dynatrace OneAgent status: {{ oneagent_status.stdout }}"

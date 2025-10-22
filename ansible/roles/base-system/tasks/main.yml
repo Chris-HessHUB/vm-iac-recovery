@@ -1,0 +1,98 @@
+---
+# Base System Configuration Tasks
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Upgrade all packages
+  apt:
+    upgrade: dist
+    autoremove: yes
+    autoclean: yes
+
+- name: Install essential packages
+  apt:
+    name:
+      - curl
+      - wget
+      - git
+      - vim
+      - htop
+      - net-tools
+      - software-properties-common
+      - apt-transport-https
+      - ca-certificates
+      - gnupg
+      - lsb-release
+      - python3
+      - python3-pip
+      - jq
+      - unzip
+    state: present
+
+- name: Set timezone
+  timezone:
+    name: "{{ system_timezone | default('America/New_York') }}"
+
+- name: Ensure chrony is installed
+  apt:
+    name: chrony
+    state: present
+
+- name: Start and enable chrony
+  systemd:
+    name: chrony
+    state: started
+    enabled: yes
+
+- name: Disable swap (required for k3s)
+  command: swapoff -a
+  when: ansible_swaptotal_mb > 0
+
+- name: Remove swap from /etc/fstab
+  lineinfile:
+    path: /etc/fstab
+    regexp: '^.*swap.*$'
+    state: absent
+
+- name: Load kernel modules for Kubernetes
+  modprobe:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - overlay
+    - br_netfilter
+
+- name: Persist kernel modules
+  copy:
+    content: |
+      overlay
+      br_netfilter
+    dest: /etc/modules-load.d/k8s.conf
+
+- name: Set sysctl parameters for Kubernetes
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  loop:
+    - { name: 'net.bridge.bridge-nf-call-iptables', value: '1' }
+    - { name: 'net.bridge.bridge-nf-call-ip6tables', value: '1' }
+    - { name: 'net.ipv4.ip_forward', value: '1' }
+
+- name: Create /opt directory structure
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /opt/apps
+    - /opt/data
+    - /opt/scripts
+
+- name: Display base system configuration complete
+  debug:
+    msg: "Base system configuration completed successfully"

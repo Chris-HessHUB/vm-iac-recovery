@@ -1,0 +1,119 @@
+---
+# Dynatrace ActiveGate Deployment via Operator
+
+- name: Set KUBECONFIG environment variable for root
+  set_fact:
+    ansible_env:
+      KUBECONFIG: "/etc/rancher/k3s/k3s.yaml"
+
+- name: Add Dynatrace Helm repository
+  shell: helm repo add dynatrace https://raw.githubusercontent.com/Dynatrace/dynatrace-operator/main/config/helm/repos/stable
+  environment:
+    KUBECONFIG: "/etc/rancher/k3s/k3s.yaml"
+  register: helm_repo_result
+  changed_when: "'has been added' in helm_repo_result.stdout"
+  failed_when: false
+
+- name: Update Helm repositories
+  shell: helm repo update
+  environment:
+    KUBECONFIG: "/etc/rancher/k3s/k3s.yaml"
+  changed_when: false
+
+- name: Check if Dynatrace Operator is installed
+  shell: helm list -n dynatrace | grep dynatrace-operator
+  environment:
+    KUBECONFIG: "/etc/rancher/k3s/k3s.yaml"
+  register: operator_check
+  failed_when: false
+  changed_when: false
+
+- name: Create Dynatrace API token secret
+  shell: |
+    kubectl create secret generic dynakube \
+      --namespace=dynatrace \
+      --from-literal="apiToken={{ dynatrace_api_token }}" \
+      --from-literal="dataIngestToken={{ dynatrace_api_token }}" \
+      --dry-run=client -o yaml | kubectl apply -f -
+  register: secret_result
+  changed_when: "'created' in secret_result.stdout"
+
+- name: Install Dynatrace Operator via Helm
+  shell: |
+    helm install dynatrace-operator dynatrace/dynatrace-operator \
+      --namespace dynatrace \
+      --create-namespace \
+      --set installCRD=true \
+      --atomic \
+      --timeout 5m
+  environment:
+    KUBECONFIG: "/etc/rancher/k3s/k3s.yaml"
+  when: operator_check.rc != 0
+  register: operator_install
+  failed_when: false
+
+- name: Wait for Dynatrace Operator to be ready
+  shell: kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=dynatrace-operator -n dynatrace --timeout=300s
+  environment:
+    KUBECONFIG: "/etc/rancher/k3s/k3s.yaml"
+  when: operator_install.changed
+  register: operator_ready
+  retries: 3
+  delay: 10
+  until: operator_ready.rc == 0
+  failed_when: false
+
+- name: Wait for DynaKube CRD to be available
+  shell: kubectl get crd dynakubes.dynatrace.com
+  environment:
+    KUBECONFIG: "/etc/rancher/k3s/k3s.yaml"
+  register: crd_check
+  retries: 10
+  delay: 5
+  until: crd_check.rc == 0
+
+- name: Create DynaKube custom resource for ActiveGate
+  shell: |
+    cat <<EOF | kubectl apply -f -
+    apiVersion: dynatrace.com/v1beta5
+    kind: DynaKube
+    metadata:
+      name: default
+      namespace: dynatrace
+    spec:
+      apiUrl: https://{{ dynatrace_environment_id }}.live.dynatrace.com/api
+      skipCertCheck: false
+      tokens: dynakube
+      
+      # ActiveGate only - simple configuration
+      activeGate:
+        capabilities:
+          - routing
+          - kubernetes-monitoring
+          - metrics-ingest
+    EOF
+  environment:
+    KUBECONFIG: "/etc/rancher/k3s/k3s.yaml"
+  register: dynakube_result
+  changed_when: "'created' in dynakube_result.stdout or 'configured' in dynakube_result.stdout"
+
+- name: Wait for ActiveGate pod to be ready
+  shell: kubectl wait --for=condition=ready pod -l app.kubernetes.io/component=activegate -n dynatrace --timeout=600s
+  environment:
+    KUBECONFIG: "/etc/rancher/k3s/k3s.yaml"
+  register: activegate_ready
+  retries: 5
+  delay: 30
+  until: activegate_ready.rc == 0
+  failed_when: false
+
+- name: Get ActiveGate pod status
+  shell: kubectl get pods -n dynatrace -l app.kubernetes.io/component=activegate
+  environment:
+    KUBECONFIG: "/etc/rancher/k3s/k3s.yaml"
+  register: activegate_pods
+  changed_when: false
+
+- name: Display ActiveGate status
+  debug:
+    msg: "{{ activegate_pods.stdout_lines }}"

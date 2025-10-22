@@ -1,0 +1,158 @@
+---
+# Flask Application Deployment Tasks
+
+- name: Create Flask ConfigMap
+  shell: |
+    cat <<EOF | kubectl apply -f -
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: flask-config
+      namespace: flask-app
+    data:
+      MYSQL_HOST: mysql.mysql.svc.cluster.local
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: "{{ mysql_database }}"
+      MYSQL_USER: "{{ mysql_user }}"
+    EOF
+  register: flask_configmap
+  changed_when: "'created' in flask_configmap.stdout or 'configured' in flask_configmap.stdout"
+
+- name: Create Flask Secret
+  shell: |
+    kubectl create secret generic flask-secret \
+      --namespace=flask-app \
+      --from-literal=mysql-password="{{ mysql_password }}" \
+      --dry-run=client -o yaml | kubectl apply -f -
+  register: flask_secret
+  changed_when: "'created' in flask_secret.stdout"
+
+- name: Deploy Flask Application
+  shell: |
+    cat <<EOF | kubectl apply -f -
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: flask-deployment
+      namespace: flask-app
+    spec:
+      replicas: 2
+      selector:
+        matchLabels:
+          app: flask
+      template:
+        metadata:
+          labels:
+            app: flask
+        spec:
+          containers:
+          - name: flask
+            image: python:3.9-slim
+            command: ["/bin/bash"]
+            args:
+              - -c
+              - |
+                mkdir -p /app
+                pip install flask mysql-connector-python gunicorn
+                cat > /app/app.py <<'EOFPY'
+                from flask import Flask, jsonify
+                import mysql.connector
+                import os
+                
+                app = Flask(__name__)
+                
+                def get_db_connection():
+                    return mysql.connector.connect(
+                        host=os.getenv('MYSQL_HOST'),
+                        port=int(os.getenv('MYSQL_PORT')),
+                        database=os.getenv('MYSQL_DATABASE'),
+                        user=os.getenv('MYSQL_USER'),
+                        password=os.getenv('MYSQL_PASSWORD')
+                    )
+                
+                @app.route('/')
+                def index():
+                    return jsonify({"status": "healthy", "service": "flask-app"})
+                
+                @app.route('/health')
+                def health():
+                    try:
+                        conn = get_db_connection()
+                        conn.close()
+                        return jsonify({"status": "healthy", "database": "connected"})
+                    except Exception as e:
+                        return jsonify({"status": "unhealthy", "error": str(e)}), 500
+                
+                if __name__ == '__main__':
+                    app.run(host='0.0.0.0', port=5000)
+                EOFPY
+                cd /app && gunicorn --bind 0.0.0.0:5000 app:app
+            ports:
+            - containerPort: 5000
+            env:
+            - name: MYSQL_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: flask-config
+                  key: MYSQL_HOST
+            - name: MYSQL_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: flask-config
+                  key: MYSQL_PORT
+            - name: MYSQL_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: flask-config
+                  key: MYSQL_DATABASE
+            - name: MYSQL_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: flask-config
+                  key: MYSQL_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: flask-secret
+                  key: mysql-password
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "250m"
+              limits:
+                memory: "512Mi"
+                cpu: "500m"
+    ---
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: flask-service
+      namespace: flask-app
+    spec:
+      selector:
+        app: flask
+      ports:
+      - protocol: TCP
+        port: 80
+        targetPort: 5000
+      type: ClusterIP
+    EOF
+  register: flask_deploy
+  changed_when: "'created' in flask_deploy.stdout or 'configured' in flask_deploy.stdout"
+
+- name: Wait for Flask pods to be ready
+  shell: kubectl wait --for=condition=ready pod -l app=flask -n flask-app --timeout=300s
+  register: flask_ready
+  retries: 3
+  delay: 10
+  until: flask_ready.rc == 0
+  failed_when: false
+
+- name: Get Flask pod status
+  shell: kubectl get pods -n flask-app
+  register: flask_pods
+  changed_when: false
+
+- name: Display Flask status
+  debug:
+    msg: "{{ flask_pods.stdout_lines }}"

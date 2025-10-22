@@ -1,0 +1,286 @@
+name: Deploy VM Infrastructure
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'test'
+        type: choice
+        options:
+          - test
+          - staging
+          - production
+      destroy:
+        description: 'Destroy infrastructure after deployment (for testing)'
+        required: false
+        default: false
+        type: boolean
+  
+  # Automatic trigger on push
+  push:
+    branches:
+      - main
+    paths:
+      - 'terraform/**'
+      - 'ansible/**'
+      - '.github/workflows/**'
+
+env:
+  TERRAFORM_VERSION: '1.0'
+  ANSIBLE_VERSION: '2.14'
+  AZURE_RESOURCE_GROUP: 'viu-itsm-eastus2-rg'
+  AZURE_LOCATION: 'eastus2'
+  STORAGE_ACCOUNT_NAME: 'viutfstate001'
+  CONTAINER_NAME: 'tfstate'
+
+jobs:
+  # Job 1: Terraform Plan and Apply
+  terraform:
+    name: 'Terraform - Provision Infrastructure'
+    runs-on: ubuntu-latest
+    outputs:
+      vm_public_ip: ${{ steps.terraform_output.outputs.vm_public_ip }}
+      vm_name: ${{ steps.terraform_output.outputs.vm_name }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+      
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Create terraform.tfvars
+        working-directory: ./terraform/environments/test
+        run: |
+          cat > terraform.tfvars << EOF
+          ssh_public_key = <<-EOT
+          ${{ secrets.SSH_PUBLIC_KEY }}
+          EOT
+          EOF
+      
+      - name: Terraform Init
+        working-directory: ./terraform/environments/test
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ env.AZURE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ env.STORAGE_ACCOUNT_NAME }}" \
+            -backend-config="container_name=${{ env.CONTAINER_NAME }}"
+      
+      - name: Terraform Validate
+        working-directory: ./terraform/environments/test
+        run: terraform validate
+      
+      - name: Terraform Plan
+        working-directory: ./terraform/environments/test
+        run: terraform plan -out=tfplan
+      
+      - name: Terraform Apply
+        working-directory: ./terraform/environments/test
+        run: terraform apply -auto-approve tfplan
+      
+      - name: Get Terraform Outputs
+        id: terraform_output
+        working-directory: ./terraform/environments/test
+        run: |
+          VM_IP=$(terraform output -raw vm_public_ip)
+          VM_NAME=$(terraform output -raw vm_name)
+          
+          echo "vm_public_ip=$VM_IP" >> $GITHUB_OUTPUT
+          echo "vm_name=$VM_NAME" >> $GITHUB_OUTPUT
+          
+          echo "VM Deployed:"
+          echo "  Name: $VM_NAME"
+          echo "  IP: $VM_IP"
+  
+  # Job 2: Wait for VM to be ready
+  wait-for-vm:
+    name: 'Wait for VM SSH Access'
+    runs-on: ubuntu-latest
+    needs: terraform
+    
+    steps:
+      - name: Wait for SSH
+        run: |
+          echo "Waiting for SSH access to ${{ needs.terraform.outputs.vm_public_ip }}..."
+          
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          
+          MAX_ATTEMPTS=30
+          ATTEMPT=0
+          
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            echo "Attempt $ATTEMPT of $MAX_ATTEMPTS..."
+            
+            if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i ~/.ssh/id_rsa azureuser@${{ needs.terraform.outputs.vm_public_ip }} "echo 'SSH connection successful'"; then
+              echo "SSH is ready!"
+              exit 0
+            fi
+            
+            echo "SSH not ready yet, waiting 10 seconds..."
+            sleep 10
+          done
+          
+          echo "ERROR: SSH did not become available"
+          exit 1
+  
+  # Job 3: Ansible Configuration
+  ansible:
+    name: 'Ansible - Configure VM'
+    runs-on: ubuntu-latest
+    needs: 
+      - terraform
+      - wait-for-vm
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install Ansible
+        run: |
+          pip install ansible
+          ansible --version
+      
+      - name: Prepare SSH Keys
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          echo "${{ secrets.SSH_PUBLIC_KEY }}" > ~/.ssh/id_rsa.pub
+          chmod 600 ~/.ssh/id_rsa
+          chmod 644 ~/.ssh/id_rsa.pub
+      
+      - name: Create Dynamic Inventory
+        working-directory: ./ansible
+        run: |
+          cat > inventory/hosts.yml << EOF
+          all:
+            children:
+              ubuntu_vms:
+                hosts:
+                  test-vm:
+                    ansible_host: ${{ needs.terraform.outputs.vm_public_ip }}
+                    ansible_user: azureuser
+                    ansible_ssh_private_key_file: ~/.ssh/id_rsa
+                    ansible_python_interpreter: /usr/bin/python3
+                    vm_environment: test
+                    vm_purpose: dr-testing
+          EOF
+      
+      - name: Update Secrets File
+        working-directory: ./ansible
+        run: |
+          cat > vars/secrets.yml << EOF
+          ---
+          dynatrace_environment_id: "bnh29255"
+          dynatrace_tenant_token: "${{ secrets.DYNATRACE_TENANT_TOKEN }}"
+          dynatrace_api_token: "${{ secrets.DYNATRACE_API_TOKEN }}"
+          dynatrace_activegate_token: "${{ secrets.DYNATRACE_API_TOKEN }}"
+          mysql_root_password: "${{ secrets.MYSQL_ROOT_PASSWORD }}"
+          mysql_database: "orders"
+          mysql_user: "appuser"
+          mysql_password: "${{ secrets.MYSQL_PASSWORD }}"
+          EOF
+      
+      - name: Test Ansible Connection
+        working-directory: ./ansible
+        run: ansible -i inventory/hosts.yml ubuntu_vms -m ping
+      
+      - name: Deploy Base System
+        working-directory: ./ansible
+        run: |
+          ansible-playbook -i inventory/hosts.yml site.yml \
+            --tags "base,docker,k3s" \
+            -v
+      
+      - name: Deploy Dynatrace
+        working-directory: ./ansible
+        continue-on-error: true
+        run: |
+          ansible-playbook -i inventory/hosts.yml site.yml \
+            --tags "oneagent,activegate" \
+            -v
+      
+      - name: Deploy Applications
+        working-directory: ./ansible
+        run: |
+          ansible-playbook -i inventory/hosts.yml site.yml \
+            --tags "k8s-apps" \
+            -v
+      
+      - name: Verify Deployment
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa azureuser@${{ needs.terraform.outputs.vm_public_ip }} << 'EOFVERIFY'
+          echo "===== Deployment Verification ====="
+          echo "k3s Version:"
+          k3s --version
+          echo ""
+          echo "All Pods:"
+          kubectl get pods -A
+          echo ""
+          echo "Deployments:"
+          kubectl get deployments -A
+          echo "====================================="
+          EOFVERIFY
+  
+  # Job 4: Destroy (optional, manual trigger only)
+  destroy:
+    name: 'Terraform - Destroy Infrastructure'
+    runs-on: ubuntu-latest
+    needs: ansible
+    if: github.event.inputs.destroy == 'true'
+    environment:
+      name: destruction-approval
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+      
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Create terraform.tfvars
+        working-directory: ./terraform/environments/test
+        run: |
+          cat > terraform.tfvars << EOF
+          ssh_public_key = <<-EOT
+          ${{ secrets.SSH_PUBLIC_KEY }}
+          EOT
+          EOF
+      
+      - name: Terraform Init
+        working-directory: ./terraform/environments/test
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ env.AZURE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ env.STORAGE_ACCOUNT_NAME }}" \
+            -backend-config="container_name=${{ env.CONTAINER_NAME }}"
+      
+      - name: Terraform Destroy
+        working-directory: ./terraform/environments/test
+        run: terraform destroy -auto-approve

@@ -1,0 +1,44 @@
+---
+# Main Ansible Playbook for VM Configuration
+# This playbook configures a fresh Ubuntu VM to match the production environment
+
+- name: Configure Ubuntu VM with k3s, MySQL, and Dynatrace
+  hosts: ubuntu_vms
+  become: yes
+  gather_facts: yes
+  
+  vars_files:
+    - vars/main.yml  # Load global variables
+    - vars/secrets.yml  # Contains sensitive data (encrypted with ansible-vault)
+  
+  roles:
+    - role: base-system
+      tags: ['base', 'system']
+    
+    - role: docker
+      tags: ['docker', 'container']
+    
+    - role: k3s
+      tags: ['k3s', 'kubernetes']
+    
+    - role: dynatrace-oneagent
+      tags: ['dynatrace', 'oneagent', 'monitoring']
+    
+    - role: dynatrace-activegate
+      tags: ['dynatrace', 'activegate', 'monitoring']
+    
+    - role: kubernetes-apps
+      tags: ['k8s-apps', 'applications', 'mysql', 'flask']
+  
+  post_tasks:
+    - name: Display deployment summary
+      debug:
+        msg:
+          - "===== Deployment Complete ====="
+          - "VM Name: {{ ansible_hostname }}"
+          - "k3s Version: {{ k3s_version }}"
+          - "Dynatrace OneAgent: Installed"
+          - "Dynatrace ActiveGate: Installed"
+          - "MySQL: Deployed to k3s"
+          - "Flask Apps: Deployed to k3s"
+          - "============================="

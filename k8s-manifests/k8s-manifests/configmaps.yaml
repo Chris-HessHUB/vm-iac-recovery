@@ -1,0 +1,730 @@
+apiVersion: v1
+items:
+- apiVersion: v1
+  data:
+    ca.crt: |
+      -----BEGIN CERTIFICATE-----
+      MIIBdzCCAR2gAwIBAgIBADAKBggqhkjOPQQDAjAjMSEwHwYDVQQDDBhrM3Mtc2Vy
+      dmVyLWNhQDE3NTg2MjkyOTMwHhcNMjUwOTIzMTIwODEzWhcNMzUwOTIxMTIwODEz
+      WjAjMSEwHwYDVQQDDBhrM3Mtc2VydmVyLWNhQDE3NTg2MjkyOTMwWTATBgcqhkjO
+      PQIBBggqhkjOPQMBBwNCAAQo61uPneH0V6+05U0L26SqeDmGKQhSeiF1HJZZRnkz
+      E44cY65m7jKRjoGNOlq0pNnvjWAOrs+sOr6O2gfcgz8To0IwQDAOBgNVHQ8BAf8E
+      BAMCAqQwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUYIS8DCI6MLwblF5GKnQn
+      dSiC1EYwCgYIKoZIzj0EAwIDSAAwRQIgW46g31Nkftomb9pvVzSGfiPrhP0tK+pK
+      Y9qIHQvY26gCIQDrb0wGS/9TeN4UK5izwin5ImPIcvtz65ZXMhcUxGUxVQ==
+      -----END CERTIFICATE-----
+  kind: ConfigMap
+  metadata:
+    annotations:
+      kubernetes.io/description: Contains a CA bundle that can be used to verify the
+        kube-apiserver when using internal endpoints such as the internal service
+        IP or kubernetes.default.svc. No other usage is guaranteed across distributions
+        of Kubernetes clusters.
+    creationTimestamp: "2025-09-23T19:06:08Z"
+    name: kube-root-ca.crt
+    namespace: default
+    resourceVersion: "14206"
+    uid: 2e5a9833-9a4d-4021-9c68-8f1fdfcc66ba
+- apiVersion: v1
+  data:
+    communication-endpoints: https://doaks-prod2-eastus.live.dynatrace.com/communication,https://doaks-prod2-eastus.live.dynatrace.com/communication,https://doaks-prod2-eastus.live.dynatrace.com/communication,https://doaks-prod2-eastus.live.dynatrace.com/communication,https://doaks-prod2-eastus.live.dynatrace.com/communication,https://doaks-prod2-eastus.live.dynatrace.com/communication,https://doaks-prod2-eastus.live.dynatrace.com/communication,https://doaks-prod2-eastus.live.dynatrace.com/communication,https://doaks-prod2-eastus.live.dynatrace.com/communication,https://doaks-prod2-eastus.live.dynatrace.com/communication,https://doaks-prod2-eastus.live.dynatrace.com/communication,https://doaks-prod2-eastus.live.dynatrace.com/communication,https://doaks-prod2-eastus.live.dynatrace.com/communication,https://doaks-prod2-eastus.live.dynatrace.com/communication,https://doaks-prod2-eastus.live.dynatrace.com/communication,https://bnh29255.live.dynatrace.com:443/communication
+    tenant-uuid: bnh29255
+  kind: ConfigMap
+  metadata:
+    annotations:
+      internal.operator.dynatrace.com/template-hash: "3195698962"
+    creationTimestamp: "2025-10-07T18:12:54Z"
+    name: default-activegate-connection-info
+    namespace: dynatrace
+    ownerReferences:
+    - apiVersion: dynatrace.com/v1beta5
+      blockOwnerDeletion: true
+      controller: true
+      kind: DynaKube
+      name: default
+      uid: e6161946-231a-423a-ad05-d99aadd0542a
+    resourceVersion: "1032171"
+    uid: 38c02d87-e5c2-44bd-b53d-79d180dde398
+- apiVersion: v1
+  data:
+    activegate: orchestration_tech=Operator-activegate;script_version=v1.7.1;orchestrator_id=a86bbfbf-488e-4563-bb3f-d4d136591808
+  kind: ConfigMap
+  metadata:
+    annotations:
+      internal.operator.dynatrace.com/template-hash: "2036457929"
+    creationTimestamp: "2025-10-07T18:12:54Z"
+    name: default-deployment-metadata
+    namespace: dynatrace
+    ownerReferences:
+    - apiVersion: dynatrace.com/v1beta5
+      blockOwnerDeletion: true
+      controller: true
+      kind: DynaKube
+      name: default
+      uid: e6161946-231a-423a-ad05-d99aadd0542a
+    resourceVersion: "579418"
+    uid: 8a5bd45d-a78a-416d-92ad-33505c315678
+- apiVersion: v1
+  data:
+    telemetry.yaml: |
+      connectors: {}
+      exporters:
+          otlphttp:
+              endpoint: ${env:DT_ENDPOINT}
+              headers:
+                  Authorization: Api-Token ${env:DT_DATA_INGEST_TOKEN}
+              tls:
+                  ca_file: /tls/custom/activegate/cert.pem
+      extensions:
+          health_check:
+              endpoint: ${env:MY_POD_IP}:13133
+      processors:
+          batch/logs:
+              send_batch_max_size: 2000
+              send_batch_size: 1800
+              timeout: 60s
+          batch/metrics:
+              send_batch_max_size: 3000
+              send_batch_size: 3000
+              timeout: 60s
+          batch/traces:
+              send_batch_max_size: 5000
+              send_batch_size: 5000
+              timeout: 60s
+          cumulativetodelta: {}
+          k8sattributes:
+              extract:
+                  annotations:
+                      - from: pod
+                        key_regex: metadata.dynatrace.com/(.*)
+                        tag_name: $$1
+                  metadata:
+                      - k8s.cluster.uid
+                      - k8s.node.name
+                      - k8s.namespace.name
+                      - k8s.pod.name
+                      - k8s.pod.uid
+                      - k8s.pod.ip
+                      - k8s.deployment.name
+                      - k8s.replicaset.name
+                      - k8s.statefulset.name
+                      - k8s.daemonset.name
+                      - k8s.cronjob.name
+                      - k8s.job.name
+              pod_association:
+                  - sources:
+                      - from: resource_attribute
+                        name: k8s.pod.name
+                      - from: resource_attribute
+                        name: k8s.namespace.name
+                  - sources:
+                      - from: resource_attribute
+                        name: k8s.pod.ip
+                  - sources:
+                      - from: resource_attribute
+                        name: k8s.pod.uid
+                  - sources:
+                      - from: connection
+          memory_limiter:
+              check_interval: 1s
+              limit_percentage: 70
+              spike_limit_percentage: 30
+          transform:
+              error_mode: ignore
+              log_statements:
+                  - context: resource
+                    statements:
+                      - set(attributes["k8s.workload.name"], attributes["k8s.statefulset.name"]) where IsString(attributes["k8s.statefulset.name"])
+                      - set(attributes["k8s.workload.name"], attributes["k8s.replicaset.name"]) where IsString(attributes["k8s.replicaset.name"])
+                      - set(attributes["k8s.workload.name"], attributes["k8s.job.name"]) where IsString(attributes["k8s.job.name"])
+                      - set(attributes["k8s.workload.name"], attributes["k8s.deployment.name"]) where IsString(attributes["k8s.deployment.name"])
+                      - set(attributes["k8s.workload.name"], attributes["k8s.daemonset.name"]) where IsString(attributes["k8s.daemonset.name"])
+                      - set(attributes["k8s.workload.name"], attributes["k8s.cronjob.name"]) where IsString(attributes["k8s.cronjob.name"])
+                      - set(attributes["k8s.workload.kind"], "statefulset") where IsString(attributes["k8s.statefulset.name"])
+                      - set(attributes["k8s.workload.kind"], "replicaset") where IsString(attributes["k8s.replicaset.name"])
+                      - set(attributes["k8s.workload.kind"], "job") where IsString(attributes["k8s.job.name"])
+                      - set(attributes["k8s.workload.kind"], "deployment") where IsString(attributes["k8s.deployment.name"])
+                      - set(attributes["k8s.workload.kind"], "daemonset") where IsString(attributes["k8s.daemonset.name"])
+                      - set(attributes["k8s.workload.kind"], "cronjob") where IsString(attributes["k8s.cronjob.name"])
+                      - set(attributes["k8s.cluster.uid"], "${env:K8S_CLUSTER_UID}") where attributes["k8s.cluster.uid"] == nil
+                      - set(attributes["k8s.cluster.name"], "${env:K8S_CLUSTER_NAME}")
+                      - set(attributes["dt.kubernetes.workload.name"], attributes["k8s.workload.name"])
+                      - set(attributes["dt.kubernetes.workload.kind"], attributes["k8s.workload.kind"])
+                      - set(attributes["dt.entity.kubernetes_cluster"], "${env:DT_ENTITY_KUBERNETES_CLUSTER}")
+                      - delete_key(attributes, "k8s.statefulset.name")
+                      - delete_key(attributes, "k8s.replicaset.name")
+                      - delete_key(attributes, "k8s.job.name")
+                      - delete_key(attributes, "k8s.deployment.name")
+                      - delete_key(attributes, "k8s.daemonset.name")
+                      - delete_key(attributes, "k8s.cronjob.name")
+              metric_statements:
+                  - context: resource
+                    statements:
+                      - set(attributes["k8s.workload.name"], attributes["k8s.statefulset.name"]) where IsString(attributes["k8s.statefulset.name"])
+                      - set(attributes["k8s.workload.name"], attributes["k8s.replicaset.name"]) where IsString(attributes["k8s.replicaset.name"])
+                      - set(attributes["k8s.workload.name"], attributes["k8s.job.name"]) where IsString(attributes["k8s.job.name"])
+                      - set(attributes["k8s.workload.name"], attributes["k8s.deployment.name"]) where IsString(attributes["k8s.deployment.name"])
+                      - set(attributes["k8s.workload.name"], attributes["k8s.daemonset.name"]) where IsString(attributes["k8s.daemonset.name"])
+                      - set(attributes["k8s.workload.name"], attributes["k8s.cronjob.name"]) where IsString(attributes["k8s.cronjob.name"])
+                      - set(attributes["k8s.workload.kind"], "statefulset") where IsString(attributes["k8s.statefulset.name"])
+                      - set(attributes["k8s.workload.kind"], "replicaset") where IsString(attributes["k8s.replicaset.name"])
+                      - set(attributes["k8s.workload.kind"], "job") where IsString(attributes["k8s.job.name"])
+                      - set(attributes["k8s.workload.kind"], "deployment") where IsString(attributes["k8s.deployment.name"])
+                      - set(attributes["k8s.workload.kind"], "daemonset") where IsString(attributes["k8s.daemonset.name"])
+                      - set(attributes["k8s.workload.kind"], "cronjob") where IsString(attributes["k8s.cronjob.name"])
+                      - set(attributes["k8s.cluster.uid"], "${env:K8S_CLUSTER_UID}") where attributes["k8s.cluster.uid"] == nil
+                      - set(attributes["k8s.cluster.name"], "${env:K8S_CLUSTER_NAME}")
+                      - set(attributes["dt.kubernetes.workload.name"], attributes["k8s.workload.name"])
+                      - set(attributes["dt.kubernetes.workload.kind"], attributes["k8s.workload.kind"])
+                      - set(attributes["dt.entity.kubernetes_cluster"], "${env:DT_ENTITY_KUBERNETES_CLUSTER}")
+                      - delete_key(attributes, "k8s.statefulset.name")
+                      - delete_key(attributes, "k8s.replicaset.name")
+                      - delete_key(attributes, "k8s.job.name")
+                      - delete_key(attributes, "k8s.deployment.name")
+                      - delete_key(attributes, "k8s.daemonset.name")
+                      - delete_key(attributes, "k8s.cronjob.name")
+              trace_statements:
+                  - context: resource
+                    statements:
+                      - set(attributes["k8s.workload.name"], attributes["k8s.statefulset.name"]) where IsString(attributes["k8s.statefulset.name"])
+                      - set(attributes["k8s.workload.name"], attributes["k8s.replicaset.name"]) where IsString(attributes["k8s.replicaset.name"])
+                      - set(attributes["k8s.workload.name"], attributes["k8s.job.name"]) where IsString(attributes["k8s.job.name"])
+                      - set(attributes["k8s.workload.name"], attributes["k8s.deployment.name"]) where IsString(attributes["k8s.deployment.name"])
+                      - set(attributes["k8s.workload.name"], attributes["k8s.daemonset.name"]) where IsString(attributes["k8s.daemonset.name"])
+                      - set(attributes["k8s.workload.name"], attributes["k8s.cronjob.name"]) where IsString(attributes["k8s.cronjob.name"])
+                      - set(attributes["k8s.workload.kind"], "statefulset") where IsString(attributes["k8s.statefulset.name"])
+                      - set(attributes["k8s.workload.kind"], "replicaset") where IsString(attributes["k8s.replicaset.name"])
+                      - set(attributes["k8s.workload.kind"], "job") where IsString(attributes["k8s.job.name"])
+                      - set(attributes["k8s.workload.kind"], "deployment") where IsString(attributes["k8s.deployment.name"])
+                      - set(attributes["k8s.workload.kind"], "daemonset") where IsString(attributes["k8s.daemonset.name"])
+                      - set(attributes["k8s.workload.kind"], "cronjob") where IsString(attributes["k8s.cronjob.name"])
+                      - set(attributes["k8s.cluster.uid"], "${env:K8S_CLUSTER_UID}") where attributes["k8s.cluster.uid"] == nil
+                      - set(attributes["k8s.cluster.name"], "${env:K8S_CLUSTER_NAME}")
+                      - set(attributes["dt.kubernetes.workload.name"], attributes["k8s.workload.name"])
+                      - set(attributes["dt.kubernetes.workload.kind"], attributes["k8s.workload.kind"])
+                      - set(attributes["dt.entity.kubernetes_cluster"], "${env:DT_ENTITY_KUBERNETES_CLUSTER}")
+                      - delete_key(attributes, "k8s.statefulset.name")
+                      - delete_key(attributes, "k8s.replicaset.name")
+                      - delete_key(attributes, "k8s.job.name")
+                      - delete_key(attributes, "k8s.deployment.name")
+                      - delete_key(attributes, "k8s.daemonset.name")
+                      - delete_key(attributes, "k8s.cronjob.name")
+          transform/add-pod-ip:
+              error_mode: ignore
+              trace_statements:
+                  - context: resource
+                    statements:
+                      - set(attributes["k8s.pod.ip"], attributes["ip"]) where attributes["k8s.pod.ip"] == nil
+      receivers:
+          jaeger:
+              protocols:
+                  grpc:
+                      endpoint: ${env:MY_POD_IP}:14250
+                  thrift_binary:
+                      endpoint: ${env:MY_POD_IP}:6832
+                  thrift_compact:
+                      endpoint: ${env:MY_POD_IP}:6831
+                  thrift_http:
+                      endpoint: ${env:MY_POD_IP}:14268
+          otlp:
+              protocols:
+                  grpc:
+                      endpoint: ${env:MY_POD_IP}:4317
+                  http:
+                      endpoint: ${env:MY_POD_IP}:4318
+          statsd:
+              endpoint: ${env:MY_POD_IP}:8125
+              timer_histogram_mapping:
+                  - histogram:
+                      max_size: 10
+                    observer_type: histogram
+                    statsd_type: histogram
+                  - histogram:
+                      max_size: 100
+                    observer_type: histogram
+                    statsd_type: timing
+                  - histogram:
+                      max_size: 100
+                    observer_type: histogram
+                    statsd_type: distribution
+          zipkin:
+              endpoint: ${env:MY_POD_IP}:9411
+      service:
+          extensions:
+              - health_check
+          pipelines:
+              logs:
+                  exporters:
+                      - otlphttp
+                  processors:
+                      - memory_limiter
+                      - transform/add-pod-ip
+                      - k8sattributes
+                      - transform
+                      - batch/logs
+                  receivers:
+                      - otlp
+              metrics:
+                  exporters:
+                      - otlphttp
+                  processors:
+                      - memory_limiter
+                      - transform/add-pod-ip
+                      - k8sattributes
+                      - transform
+                      - cumulativetodelta
+                      - batch/metrics
+                  receivers:
+                      - otlp
+                      - statsd
+              traces:
+                  exporters:
+                      - otlphttp
+                  processors:
+                      - memory_limiter
+                      - transform/add-pod-ip
+                      - k8sattributes
+                      - transform
+                      - batch/traces
+                  receivers:
+                      - jaeger
+                      - otlp
+                      - zipkin
+  kind: ConfigMap
+  metadata:
+    annotations:
+      internal.operator.dynatrace.com/template-hash: "2998118229"
+    creationTimestamp: "2025-10-07T18:13:06Z"
+    labels:
+      app.kubernetes.io/component: dynatrace-opentelemetry-collector
+      app.kubernetes.io/created-by: default
+      app.kubernetes.io/name: dynatrace-operator
+      app.kubernetes.io/version: v1.7.1
+    name: default-telemetry-collector-config
+    namespace: dynatrace
+    ownerReferences:
+    - apiVersion: dynatrace.com/v1beta5
+      blockOwnerDeletion: true
+      controller: true
+      kind: DynaKube
+      name: default
+      uid: e6161946-231a-423a-ad05-d99aadd0542a
+    resourceVersion: "543847"
+    uid: 4162446a-58bc-4fbd-b7de-f506a22fc5eb
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    annotations:
+      DTOperatorLastUpdated: "2025-10-21T16:00:28Z"
+    creationTimestamp: "2025-10-07T18:12:06Z"
+    name: dynatrace-node-cache
+    namespace: dynatrace
+    ownerReferences:
+    - apiVersion: apps/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Deployment
+      name: dynatrace-operator
+      uid: dea6bf9d-e38b-421f-95a1-99e2d9defc91
+    resourceVersion: "1130003"
+    uid: 61cc3849-af06-4f11-bc1c-37dc5c41bdcf
+- apiVersion: v1
+  data:
+    DT_ENDPOINT: https://default-activegate.dynatrace.svc/e/bnh29255/api/v2/otlp
+  kind: ConfigMap
+  metadata:
+    annotations:
+      internal.operator.dynatrace.com/template-hash: "3878039600"
+    creationTimestamp: "2025-10-07T18:13:06Z"
+    labels:
+      app.kubernetes.io/component: dynatrace-opentelemetry-collector
+      app.kubernetes.io/created-by: default
+      app.kubernetes.io/name: dynatrace-operator
+      app.kubernetes.io/version: v1.7.1
+    name: dynatrace-otlp-api-endpoint
+    namespace: dynatrace
+    ownerReferences:
+    - apiVersion: dynatrace.com/v1beta5
+      blockOwnerDeletion: true
+      controller: true
+      kind: DynaKube
+      name: default
+      uid: e6161946-231a-423a-ad05-d99aadd0542a
+    resourceVersion: "543846"
+    uid: fa153b52-ccb5-4ee4-8109-9aa664f121f3
+- apiVersion: v1
+  data:
+    ca.crt: |
+      -----BEGIN CERTIFICATE-----
+      MIIBdzCCAR2gAwIBAgIBADAKBggqhkjOPQQDAjAjMSEwHwYDVQQDDBhrM3Mtc2Vy
+      dmVyLWNhQDE3NTg2MjkyOTMwHhcNMjUwOTIzMTIwODEzWhcNMzUwOTIxMTIwODEz
+      WjAjMSEwHwYDVQQDDBhrM3Mtc2VydmVyLWNhQDE3NTg2MjkyOTMwWTATBgcqhkjO
+      PQIBBggqhkjOPQMBBwNCAAQo61uPneH0V6+05U0L26SqeDmGKQhSeiF1HJZZRnkz
+      E44cY65m7jKRjoGNOlq0pNnvjWAOrs+sOr6O2gfcgz8To0IwQDAOBgNVHQ8BAf8E
+      BAMCAqQwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUYIS8DCI6MLwblF5GKnQn
+      dSiC1EYwCgYIKoZIzj0EAwIDSAAwRQIgW46g31Nkftomb9pvVzSGfiPrhP0tK+pK
+      Y9qIHQvY26gCIQDrb0wGS/9TeN4UK5izwin5ImPIcvtz65ZXMhcUxGUxVQ==
+      -----END CERTIFICATE-----
+  kind: ConfigMap
+  metadata:
+    annotations:
+      kubernetes.io/description: Contains a CA bundle that can be used to verify the
+        kube-apiserver when using internal endpoints such as the internal service
+        IP or kubernetes.default.svc. No other usage is guaranteed across distributions
+        of Kubernetes clusters.
+    creationTimestamp: "2025-10-07T18:11:59Z"
+    name: kube-root-ca.crt
+    namespace: dynatrace
+    resourceVersion: "543637"
+    uid: 27e30e1d-f2b9-4bae-86b2-c2d9dac39783
+- apiVersion: v1
+  data:
+    APP_ENV: production
+    DEBUG: "false"
+    MYSQL_DB: flaskdb
+    MYSQL_HOST: mysql-svc.mysql.svc.cluster.local
+  kind: ConfigMap
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"v1","data":{"APP_ENV":"production","DEBUG":"false","MYSQL_DB":"flaskdb","MYSQL_HOST":"mysql-svc.mysql.svc.cluster.local"},"kind":"ConfigMap","metadata":{"annotations":{},"name":"flask-config","namespace":"flask-app"}}
+    creationTimestamp: "2025-09-23T19:08:54Z"
+    name: flask-config
+    namespace: flask-app
+    resourceVersion: "14320"
+    uid: 42251efc-2e4f-4b47-a9f3-02055fed7556
+- apiVersion: v1
+  data:
+    ca.crt: |
+      -----BEGIN CERTIFICATE-----
+      MIIBdzCCAR2gAwIBAgIBADAKBggqhkjOPQQDAjAjMSEwHwYDVQQDDBhrM3Mtc2Vy
+      dmVyLWNhQDE3NTg2MjkyOTMwHhcNMjUwOTIzMTIwODEzWhcNMzUwOTIxMTIwODEz
+      WjAjMSEwHwYDVQQDDBhrM3Mtc2VydmVyLWNhQDE3NTg2MjkyOTMwWTATBgcqhkjO
+      PQIBBggqhkjOPQMBBwNCAAQo61uPneH0V6+05U0L26SqeDmGKQhSeiF1HJZZRnkz
+      E44cY65m7jKRjoGNOlq0pNnvjWAOrs+sOr6O2gfcgz8To0IwQDAOBgNVHQ8BAf8E
+      BAMCAqQwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUYIS8DCI6MLwblF5GKnQn
+      dSiC1EYwCgYIKoZIzj0EAwIDSAAwRQIgW46g31Nkftomb9pvVzSGfiPrhP0tK+pK
+      Y9qIHQvY26gCIQDrb0wGS/9TeN4UK5izwin5ImPIcvtz65ZXMhcUxGUxVQ==
+      -----END CERTIFICATE-----
+  kind: ConfigMap
+  metadata:
+    annotations:
+      kubernetes.io/description: Contains a CA bundle that can be used to verify the
+        kube-apiserver when using internal endpoints such as the internal service
+        IP or kubernetes.default.svc. No other usage is guaranteed across distributions
+        of Kubernetes clusters.
+    creationTimestamp: "2025-09-23T19:08:24Z"
+    name: kube-root-ca.crt
+    namespace: flask-app
+    resourceVersion: "14251"
+    uid: f109fdf9-32ba-4e67-af74-69c185ee9ca5
+- apiVersion: v1
+  data:
+    ca.crt: |
+      -----BEGIN CERTIFICATE-----
+      MIIBdzCCAR2gAwIBAgIBADAKBggqhkjOPQQDAjAjMSEwHwYDVQQDDBhrM3Mtc2Vy
+      dmVyLWNhQDE3NTg2MjkyOTMwHhcNMjUwOTIzMTIwODEzWhcNMzUwOTIxMTIwODEz
+      WjAjMSEwHwYDVQQDDBhrM3Mtc2VydmVyLWNhQDE3NTg2MjkyOTMwWTATBgcqhkjO
+      PQIBBggqhkjOPQMBBwNCAAQo61uPneH0V6+05U0L26SqeDmGKQhSeiF1HJZZRnkz
+      E44cY65m7jKRjoGNOlq0pNnvjWAOrs+sOr6O2gfcgz8To0IwQDAOBgNVHQ8BAf8E
+      BAMCAqQwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUYIS8DCI6MLwblF5GKnQn
+      dSiC1EYwCgYIKoZIzj0EAwIDSAAwRQIgW46g31Nkftomb9pvVzSGfiPrhP0tK+pK
+      Y9qIHQvY26gCIQDrb0wGS/9TeN4UK5izwin5ImPIcvtz65ZXMhcUxGUxVQ==
+      -----END CERTIFICATE-----
+  kind: ConfigMap
+  metadata:
+    annotations:
+      kubernetes.io/description: Contains a CA bundle that can be used to verify the
+        kube-apiserver when using internal endpoints such as the internal service
+        IP or kubernetes.default.svc. No other usage is guaranteed across distributions
+        of Kubernetes clusters.
+    creationTimestamp: "2025-09-23T12:08:32Z"
+    name: kube-root-ca.crt
+    namespace: kube-node-lease
+    resourceVersion: "438"
+    uid: e0e1ce15-ecb7-43a2-a33e-bf5fa689b73c
+- apiVersion: v1
+  data:
+    ca.crt: |
+      -----BEGIN CERTIFICATE-----
+      MIIBdzCCAR2gAwIBAgIBADAKBggqhkjOPQQDAjAjMSEwHwYDVQQDDBhrM3Mtc2Vy
+      dmVyLWNhQDE3NTg2MjkyOTMwHhcNMjUwOTIzMTIwODEzWhcNMzUwOTIxMTIwODEz
+      WjAjMSEwHwYDVQQDDBhrM3Mtc2VydmVyLWNhQDE3NTg2MjkyOTMwWTATBgcqhkjO
+      PQIBBggqhkjOPQMBBwNCAAQo61uPneH0V6+05U0L26SqeDmGKQhSeiF1HJZZRnkz
+      E44cY65m7jKRjoGNOlq0pNnvjWAOrs+sOr6O2gfcgz8To0IwQDAOBgNVHQ8BAf8E
+      BAMCAqQwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUYIS8DCI6MLwblF5GKnQn
+      dSiC1EYwCgYIKoZIzj0EAwIDSAAwRQIgW46g31Nkftomb9pvVzSGfiPrhP0tK+pK
+      Y9qIHQvY26gCIQDrb0wGS/9TeN4UK5izwin5ImPIcvtz65ZXMhcUxGUxVQ==
+      -----END CERTIFICATE-----
+  kind: ConfigMap
+  metadata:
+    annotations:
+      kubernetes.io/description: Contains a CA bundle that can be used to verify the
+        kube-apiserver when using internal endpoints such as the internal service
+        IP or kubernetes.default.svc. No other usage is guaranteed across distributions
+        of Kubernetes clusters.
+    creationTimestamp: "2025-09-23T12:08:32Z"
+    name: kube-root-ca.crt
+    namespace: kube-public
+    resourceVersion: "439"
+    uid: 550a3c5e-a9d2-4896-a1d5-f499b270736d
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    annotations:
+      objectset.rio.cattle.io/applied: H4sIAAAAAAAA/4yST8vUMBDGv4rMOVnbzVvTBjy9HgQRQcSLeJikk21smpQkuyJLv7u0Lu7isuoxf+Y3zzzPnAFn95lSdjGAglMNDEYXelDwHIN1h/c4A4OJCvZYENQZMIRYsLgY8nqM+huZkqnskos7g6V42rn40q2MgfzETQwlRe8pcTNgKjzRweWSNgawh4T4PVDih9N4Ad08nWr24p0L/eu35KfnFfpPTsCJQEFJSNaN//U9z2jWmvGoiecfudAECwOTaJP+yU2UC04zqHD0noFHTf6vpgyYB1BgKttJQon7hkRPRtZdI41EsX+qUbRWUGORGrt2u+j+5dxqJYXCr1M80slgm+MjWUoUDGVQX/4I+85TYKB9NOOHtfINedoCUhZ9JgbXGH9fXTblNoQ7m4/bIlRW9K0WFdedkPxJSOR6b19xLXRn2ratakmwfF2WnwEAAP//NmeiA5ECAAA
+      objectset.rio.cattle.io/id: helm-controller-chart-registration
+      objectset.rio.cattle.io/owner-gvk: helm.cattle.io/v1, Kind=HelmChart
+      objectset.rio.cattle.io/owner-name: traefik
+      objectset.rio.cattle.io/owner-namespace: kube-system
+    creationTimestamp: "2025-09-23T12:08:29Z"
+    labels:
+      objectset.rio.cattle.io/hash: c0f97ea7a25e3dec71957c7a3241a38f3e5fae5f
+    name: chart-content-traefik
+    namespace: kube-system
+    ownerReferences:
+    - apiVersion: helm.cattle.io/v1
+      blockOwnerDeletion: false
+      controller: false
+      kind: HelmChart
+      name: traefik
+      uid: 0f3d8b30-b937-437a-b2f6-b3b9c888017e
+    resourceVersion: "374"
+    uid: 3600c95b-fe2a-4bcf-a69c-6bc7a355d98c
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    annotations:
+      objectset.rio.cattle.io/applied: H4sIAAAAAAAA/4yST4vbMBDFv0qZs5T6T2zHgp7SQ6GUQim9lB7G0ihWLUtGUlJK8HcvdsNu9k929yiJ99Ob9+YMOJkfFKLxDgSccmAwGKdAwN47bQ5fcAIGIyVUmBDEGdA5nzAZ7+Jy9N1vkilS2gTjNxJTsrQx/r1ZGD3ZkUvvUvDWUuCyx5B4oIOJKawMYDcJ/o+jwA+n4QK6ejrl7N1n49SHT2TH/QJ9leNwJBCQApI2A5dBvUkSJ5SLbjh2xOPfmGiEmYEMtNr/bkaKCccJhDtay8BiR/bFYHqMPQjY7rQuVSXLPG+6sim0VBKrrG3aSre6aLICdVa1xfLbxfv/9JY4ySX+cJJbXhmss3wjTYGcpAji56PSn2QLDDrr5fB1UX4kS2tRQqONxOC+zrury8Zcl/Fs3Md1KXSui7pWLd9hpvhWouJtozWv66bZFrqikhTMv+b5XwAAAP//WlUuwp0CAAA
+      objectset.rio.cattle.io/id: helm-controller-chart-registration
+      objectset.rio.cattle.io/owner-gvk: helm.cattle.io/v1, Kind=HelmChart
+      objectset.rio.cattle.io/owner-name: traefik-crd
+      objectset.rio.cattle.io/owner-namespace: kube-system
+    creationTimestamp: "2025-09-23T12:08:29Z"
+    labels:
+      objectset.rio.cattle.io/hash: 48ff3d5c3117b372fcdca509795f9f2702af0592
+    name: chart-content-traefik-crd
+    namespace: kube-system
+    ownerReferences:
+    - apiVersion: helm.cattle.io/v1
+      blockOwnerDeletion: false
+      controller: false
+      kind: HelmChart
+      name: traefik-crd
+      uid: f1f266d9-8a0d-4cad-97ff-667742f5e3ed
+    resourceVersion: "373"
+    uid: 65600ce5-909a-42ef-836b-0a2f0941f971
+- apiVersion: v1
+  data:
+    clusterDNS: 10.43.0.10
+    clusterDomain: cluster.local
+  kind: ConfigMap
+  metadata:
+    creationTimestamp: "2025-09-23T12:08:27Z"
+    name: cluster-dns
+    namespace: kube-system
+    resourceVersion: "248"
+    uid: 9ae2d7b7-2485-4db7-a55d-ca7214b535aa
+- apiVersion: v1
+  data:
+    Corefile: |
+      .:53 {
+          errors
+          health
+          ready
+          kubernetes cluster.local in-addr.arpa ip6.arpa {
+            pods insecure
+            fallthrough in-addr.arpa ip6.arpa
+          }
+          hosts /etc/coredns/NodeHosts {
+            ttl 60
+            reload 15s
+            fallthrough
+          }
+          prometheus :9153
+          forward . /etc/resolv.conf
+          cache 30
+          loop
+          reload
+          loadbalance
+          import /etc/coredns/custom/*.override
+      }
+      import /etc/coredns/custom/*.server
+    NodeHosts: |
+      10.60.1.4 vm-showcase-01
+  kind: ConfigMap
+  metadata:
+    annotations:
+      objectset.rio.cattle.io/applied: H4sIAAAAAAAA/4yQwWrzMBCEX0Xs2fEf20nsX9BDybH02lMva2kdq1Z2g6SkBJN3L8IUCiVtbyNGOzvfzoAn90IhOmHQcKmgAIsJQc+wl0CD8wQaSr1t1PzKSilFIUiIix4JfRoXHQjtdZHTuafAlCgq488xUSi9wK2AybEFDXvhwR2e8QQFHCnh50ZkloTJCcf8lP6NTIqUyuCkNJiSp9LJP5czoLjryztTWB0uE2iYmvjFuVSFenJsHx6tFf41gvGY6Y0Eshz/9D2e0OSZfIJVvMZExwzusSf/I9SIcQQNvaG6a+r/XVdV7abBddPtsN9W66Eedi0N7aberM22zaHf6t0tcPsIAAD//8Ix+PfoAQAA
+      objectset.rio.cattle.io/id: ""
+      objectset.rio.cattle.io/owner-gvk: k3s.cattle.io/v1, Kind=Addon
+      objectset.rio.cattle.io/owner-name: coredns
+      objectset.rio.cattle.io/owner-namespace: kube-system
+    creationTimestamp: "2025-09-23T12:08:29Z"
+    labels:
+      objectset.rio.cattle.io/hash: bce283298811743a0386ab510f2f67ef74240c57
+    name: coredns
+    namespace: kube-system
+    resourceVersion: "398"
+    uid: 62b1c87e-c20a-45d5-b98e-ec69a4b420bd
+- apiVersion: v1
+  data:
+    client-ca-file: |
+      -----BEGIN CERTIFICATE-----
+      MIIBdzCCAR2gAwIBAgIBADAKBggqhkjOPQQDAjAjMSEwHwYDVQQDDBhrM3MtY2xp
+      ZW50LWNhQDE3NTg2MjkyOTMwHhcNMjUwOTIzMTIwODEzWhcNMzUwOTIxMTIwODEz
+      WjAjMSEwHwYDVQQDDBhrM3MtY2xpZW50LWNhQDE3NTg2MjkyOTMwWTATBgcqhkjO
+      PQIBBggqhkjOPQMBBwNCAAR6oYTGX84kBu4BG/4onPw/69nwoB4jQfdOHlnYVdOH
+      Q3JhcHPEatCKv3A7DRfFgM5RzSoyDdRdsJYeIC1tjJzSo0IwQDAOBgNVHQ8BAf8E
+      BAMCAqQwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUrTZj1cRAgU4E0uZYziTy
+      BeHLO7EwCgYIKoZIzj0EAwIDSAAwRQIhAObBFuKXG5QeeQyEREAsRtfHr9OkS6Mi
+      Fn2LRSfrxpJoAiB28PZl+dFBGGaIBYNhQNkloCDBjR9mSR/57NwZZjYcZQ==
+      -----END CERTIFICATE-----
+    requestheader-allowed-names: '["system:auth-proxy"]'
+    requestheader-client-ca-file: |
+      -----BEGIN CERTIFICATE-----
+      MIIBhzCCAS2gAwIBAgIBADAKBggqhkjOPQQDAjArMSkwJwYDVQQDDCBrM3MtcmVx
+      dWVzdC1oZWFkZXItY2FAMTc1ODYyOTI5MzAeFw0yNTA5MjMxMjA4MTNaFw0zNTA5
+      MjExMjA4MTNaMCsxKTAnBgNVBAMMIGszcy1yZXF1ZXN0LWhlYWRlci1jYUAxNzU4
+      NjI5MjkzMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAERtXlzeASFekKlB/zu8b1
+      WleGlMD0dKCTUZo46OzStFFbo8oqgaEPzdMuCkpWB5d2KQKk0mmUeKJ2H7Hd8JDw
+      QqNCMEAwDgYDVR0PAQH/BAQDAgKkMA8GA1UdEwEB/wQFMAMBAf8wHQYDVR0OBBYE
+      FE5HTeR/UsENnzOQ3pvtH/HKrFu6MAoGCCqGSM49BAMCA0gAMEUCIFYeu648JBLQ
+      CB7ELhY/wI4P+udX+ZuYl3hGVCIqgTx6AiEAgNX0+OAYdqcoK/gcANqJAZJDQhfI
+      G6Lvzg10+b3Q0eg=
+      -----END CERTIFICATE-----
+    requestheader-extra-headers-prefix: '["X-Remote-Extra-"]'
+    requestheader-group-headers: '["X-Remote-Group"]'
+    requestheader-username-headers: '["X-Remote-User"]'
+  kind: ConfigMap
+  metadata:
+    creationTimestamp: "2025-09-23T12:08:22Z"
+    name: extension-apiserver-authentication
+    namespace: kube-system
+    resourceVersion: "30"
+    uid: 53e4ebad-7b95-4533-95c9-cac762066d9a
+- apiVersion: v1
+  data:
+    since: "2025-09-23"
+  kind: ConfigMap
+  metadata:
+    creationTimestamp: "2025-09-23T12:08:22Z"
+    name: kube-apiserver-legacy-service-account-token-tracking
+    namespace: kube-system
+    resourceVersion: "38"
+    uid: cfc21580-7a4a-4ecd-86c8-35611c7a4e6c
+- apiVersion: v1
+  data:
+    ca.crt: |
+      -----BEGIN CERTIFICATE-----
+      MIIBdzCCAR2gAwIBAgIBADAKBggqhkjOPQQDAjAjMSEwHwYDVQQDDBhrM3Mtc2Vy
+      dmVyLWNhQDE3NTg2MjkyOTMwHhcNMjUwOTIzMTIwODEzWhcNMzUwOTIxMTIwODEz
+      WjAjMSEwHwYDVQQDDBhrM3Mtc2VydmVyLWNhQDE3NTg2MjkyOTMwWTATBgcqhkjO
+      PQIBBggqhkjOPQMBBwNCAAQo61uPneH0V6+05U0L26SqeDmGKQhSeiF1HJZZRnkz
+      E44cY65m7jKRjoGNOlq0pNnvjWAOrs+sOr6O2gfcgz8To0IwQDAOBgNVHQ8BAf8E
+      BAMCAqQwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUYIS8DCI6MLwblF5GKnQn
+      dSiC1EYwCgYIKoZIzj0EAwIDSAAwRQIgW46g31Nkftomb9pvVzSGfiPrhP0tK+pK
+      Y9qIHQvY26gCIQDrb0wGS/9TeN4UK5izwin5ImPIcvtz65ZXMhcUxGUxVQ==
+      -----END CERTIFICATE-----
+  kind: ConfigMap
+  metadata:
+    annotations:
+      kubernetes.io/description: Contains a CA bundle that can be used to verify the
+        kube-apiserver when using internal endpoints such as the internal service
+        IP or kubernetes.default.svc. No other usage is guaranteed across distributions
+        of Kubernetes clusters.
+    creationTimestamp: "2025-09-23T12:08:32Z"
+    name: kube-root-ca.crt
+    namespace: kube-system
+    resourceVersion: "440"
+    uid: 4dbd2ca1-c33e-4fa2-8f7e-ccd5d6cfd518
+- apiVersion: v1
+  data:
+    config.json: |-
+      {
+        "nodePathMap":[
+        {
+          "node":"DEFAULT_PATH_FOR_NON_LISTED_NODES",
+          "paths":["/var/lib/rancher/k3s/storage"]
+        }
+        ]
+      }
+    helperPod.yaml: |-
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: helper-pod
+      spec:
+        containers:
+        - name: helper-pod
+          image: "rancher/mirrored-library-busybox:1.36.1"
+          imagePullPolicy: IfNotPresent
+    setup: |-
+      #!/bin/sh
+      set -eu
+      mkdir -m 0777 -p "${VOL_DIR}"
+      chmod 700 "${VOL_DIR}/.."
+    teardown: |-
+      #!/bin/sh
+      set -eu
+      rm -rf "${VOL_DIR}"
+  kind: ConfigMap
+  metadata:
+    annotations:
+      objectset.rio.cattle.io/applied: H4sIAAAAAAAA/4ySX2vbMBTFv4p2t0c7deb8Q7CHsLSsLG1Cl/VlAnMtybFq+0pYSkoJ+e5DCYFurNsepR/n6JyDDoDOPOreG0vAYT+EBBQGBH4Aaaky28GTP6GDIMYEkFV6jaG+QyeA/4iXJ3JhAriAxfXN/PtyU6znmy/FzeqhuF/dF8vbb5vrRQEJ1Lp1ul9bNXjBrgX+KgNn+6GgxpDibG2VoE4HjIF4fISw05yd5amL2DstT0haSMDrsHPA4f27q9LQla8FeR1YqneCukaZnqUdy6bTKUsdE/Dh8LhaFovbh6MAQbLurGLTLLsQSCBo7JV9pjc8+46lffWbExwTiAWAw+fTgnfoIIFLkbgsEtmAwVjy8WjLJy2D12HQGzuQGEKrB8ZemegByZvcPpPu0+2+AQ5N7l+R/TBhXw2pT3OlLP3TIu4KHForsU19sD1u9X+JvEMZlc2u1Kl/8UF3sX6LpW7/Wq1GXwOH4Syv8rGcjKuqlHk2GU2yvBrl1XA8y9RMTmb4UWGpRtH0l5AOQ52ePyic0R+jHH8GAAD//7kWEdfgAgAA
+      objectset.rio.cattle.io/id: ""
+      objectset.rio.cattle.io/owner-gvk: k3s.cattle.io/v1, Kind=Addon
+      objectset.rio.cattle.io/owner-name: local-storage
+      objectset.rio.cattle.io/owner-namespace: kube-system
+    creationTimestamp: "2025-09-23T12:08:29Z"
+    labels:
+      objectset.rio.cattle.io/hash: 183f35c65ffbc3064603f43f1580d8c68a2dabd4
+    name: local-path-config
+    namespace: kube-system
+    resourceVersion: "292"
+    uid: 6a00a33d-0e4a-46fb-b140-2d1276e2482f
+- apiVersion: v1
+  data:
+    ca.crt: |
+      -----BEGIN CERTIFICATE-----
+      MIIBdzCCAR2gAwIBAgIBADAKBggqhkjOPQQDAjAjMSEwHwYDVQQDDBhrM3Mtc2Vy
+      dmVyLWNhQDE3NTg2MjkyOTMwHhcNMjUwOTIzMTIwODEzWhcNMzUwOTIxMTIwODEz
+      WjAjMSEwHwYDVQQDDBhrM3Mtc2VydmVyLWNhQDE3NTg2MjkyOTMwWTATBgcqhkjO
+      PQIBBggqhkjOPQMBBwNCAAQo61uPneH0V6+05U0L26SqeDmGKQhSeiF1HJZZRnkz
+      E44cY65m7jKRjoGNOlq0pNnvjWAOrs+sOr6O2gfcgz8To0IwQDAOBgNVHQ8BAf8E
+      BAMCAqQwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUYIS8DCI6MLwblF5GKnQn
+      dSiC1EYwCgYIKoZIzj0EAwIDSAAwRQIgW46g31Nkftomb9pvVzSGfiPrhP0tK+pK
+      Y9qIHQvY26gCIQDrb0wGS/9TeN4UK5izwin5ImPIcvtz65ZXMhcUxGUxVQ==
+      -----END CERTIFICATE-----
+  kind: ConfigMap
+  metadata:
+    annotations:
+      kubernetes.io/description: Contains a CA bundle that can be used to verify the
+        kube-apiserver when using internal endpoints such as the internal service
+        IP or kubernetes.default.svc. No other usage is guaranteed across distributions
+        of Kubernetes clusters.
+    creationTimestamp: "2025-09-23T19:08:24Z"
+    name: kube-root-ca.crt
+    namespace: mysql
+    resourceVersion: "14253"
+    uid: 83350925-3037-46d9-a190-ece0e02fc9c0
+- apiVersion: v1
+  data:
+    initdb.sql: |
+      CREATE DATABASE IF NOT EXISTS flaskdb;
+      CREATE USER 'flaskuser'@'%' IDENTIFIED BY 'flaskpass';
+      GRANT ALL PRIVILEGES ON flaskdb.* TO 'flaskuser'@'%';
+      FLUSH PRIVILEGES;
+  kind: ConfigMap
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"v1","data":{"initdb.sql":"CREATE DATABASE IF NOT EXISTS flaskdb;\nCREATE USER 'flaskuser'@'%' IDENTIFIED BY 'flaskpass';\nGRANT ALL PRIVILEGES ON flaskdb.* TO 'flaskuser'@'%';\nFLUSH PRIVILEGES;\n"},"kind":"ConfigMap","metadata":{"annotations":{},"name":"mysql-initdb","namespace":"mysql"}}
+    creationTimestamp: "2025-09-23T19:08:24Z"
+    name: mysql-initdb
+    namespace: mysql
+    resourceVersion: "14254"
+    uid: c187ace9-3265-4796-804b-2fec581839f4
+kind: List
+metadata:
+  resourceVersion: ""

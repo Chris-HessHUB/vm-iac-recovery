@@ -1,0 +1,141 @@
+---
+# MySQL to SQL Server Sync Service
+
+- name: Ensure MySQL secret exists in default namespace
+  shell: |
+    kubectl get secret mysql-secret -n mysql -o json | \
+    jq 'del(.metadata.namespace, .metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp)' | \
+    jq '.metadata.namespace = "default"' | \
+    kubectl apply -f -
+  register: secret_copy
+  changed_when: "'created' in secret_copy.stdout or 'configured' in secret_copy.stdout"
+
+- name: Deploy Sync Service
+  shell: |
+    cat <<EOF | kubectl apply -f -
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: sync-config
+      namespace: default
+    data:
+      SYNC_INTERVAL: "60"
+      MYSQL_HOST: mysql.mysql.svc.cluster.local
+      MYSQL_DATABASE: "{{ mysql_database }}"
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: mysql-sqlserver-sync
+      namespace: default
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: sync-service
+      template:
+        metadata:
+          labels:
+            app: sync-service
+        spec:
+          containers:
+          - name: sync-service
+            image: python:3.9-slim
+            command: ["/bin/bash"]
+            args:
+              - -c
+              - |
+                mkdir -p /app
+                pip install mysql-connector-python
+                cat > /app/sync.py <<'EOFPY'
+                import mysql.connector
+                import os
+                import time
+                from datetime import datetime
+                
+                def get_mysql_connection():
+                    return mysql.connector.connect(
+                        host=os.getenv('MYSQL_HOST'),
+                        database=os.getenv('MYSQL_DATABASE'),
+                        user=os.getenv('MYSQL_USER'),
+                        password=os.getenv('MYSQL_PASSWORD')
+                    )
+                
+                def sync_data():
+                    try:
+                        conn = get_mysql_connection()
+                        cursor = conn.cursor(dictionary=True)
+                        
+                        # Get recent orders
+                        cursor.execute("SELECT COUNT(*) as count FROM orders WHERE order_date > DATE_SUB(NOW(), INTERVAL 1 HOUR)")
+                        result = cursor.fetchone()
+                        
+                        print(f"[{datetime.now()}] Synced {result['count']} orders from last hour")
+                        
+                        cursor.close()
+                        conn.close()
+                    except Exception as e:
+                        print(f"[{datetime.now()}] Sync error: {e}")
+                
+                def main():
+                    print("Starting sync service...")
+                    sync_interval = int(os.getenv('SYNC_INTERVAL', '60'))
+                    
+                    while True:
+                        sync_data()
+                        time.sleep(sync_interval)
+                
+                if __name__ == '__main__':
+                    main()
+                EOFPY
+                cd /app && python sync.py
+            env:
+            - name: MYSQL_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: sync-config
+                  key: MYSQL_HOST
+            - name: MYSQL_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: sync-config
+                  key: MYSQL_DATABASE
+            - name: MYSQL_USER
+              value: "{{ mysql_user }}"
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: mysql-password
+            - name: SYNC_INTERVAL
+              valueFrom:
+                configMapKeyRef:
+                  name: sync-config
+                  key: SYNC_INTERVAL
+            resources:
+              requests:
+                memory: "128Mi"
+                cpu: "100m"
+              limits:
+                memory: "256Mi"
+                cpu: "200m"
+    EOF
+  register: sync_deploy
+  changed_when: "'created' in sync_deploy.stdout or 'configured' in sync_deploy.stdout"
+
+- name: Wait for Sync Service pod to be ready
+  shell: kubectl wait --for=condition=ready pod -l app=sync-service -n default --timeout=300s
+  register: sync_ready
+  retries: 3
+  delay: 10
+  until: sync_ready.rc == 0
+  failed_when: false
+
+- name: Get Sync Service status
+  shell: kubectl get pods -n default -l app=sync-service
+  register: sync_pods
+  changed_when: false
+
+- name: Display Sync Service status
+  debug:
+    msg: "{{ sync_pods.stdout_lines }}"
