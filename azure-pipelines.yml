@@ -70,7 +70,7 @@ stages:
           - task: AzureCLI@2
             displayName: 'Azure Login and Terraform Init'
             inputs:
-              azureSubscription: 'Azure-Service-Connection'  # TODO: Replace with your service connection name
+              azureSubscription: 'Chris-HessHUB'
               scriptType: 'bash'
               scriptLocation: 'inlineScript'
               inlineScript: |
@@ -121,7 +121,7 @@ stages:
           - task: AzureCLI@2
             displayName: 'Terraform Apply'
             inputs:
-              azureSubscription: 'Azure-Service-Connection'  # TODO: Replace with your service connection name
+              azureSubscription: 'Chris-HessHUB'
               scriptType: 'bash'
               scriptLocation: 'inlineScript'
               inlineScript: |
@@ -357,7 +357,7 @@ stages:
           - task: AzureCLI@2
             displayName: 'Destroy Infrastructure'
             inputs:
-              azureSubscription: 'Azure-Service-Connection'
+              azureSubscription: 'Chris-HessHUB'
               scriptType: 'bash'
               scriptLocation: 'inlineScript'
               inlineScript: |
